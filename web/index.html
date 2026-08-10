@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Securify Local — ローカル脆弱性スキャナ</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --panel:#ffffff; --ink:#1a2230; --muted:#667085; --line:#e6eaf0;
+    --sidebar:#0e1a2b; --sidebar-ink:#c4cede; --sidebar-active:#1c3350; --accent:#2f6bff;
+    --crit:#d81b7a; --high:#f4511e; --med:#f5a623; --low:#2e90fa; --info:#98a2b3;
+    --crit-bg:#fce4f1; --high-bg:#fde6dd; --med-bg:#fdf1dc; --low-bg:#e4f0ff; --info-bg:#eef1f5;
+    --radius:12px; --shadow:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .app{display:flex;min-height:100vh}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{width:216px;background:var(--sidebar);color:var(--sidebar-ink);flex-shrink:0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:10px;padding:18px 18px 16px;font-weight:700;color:#fff;font-size:16px}
+  .brand .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#4f8cff,#6ad0ff);display:flex;align-items:center;justify-content:center;font-size:15px}
+  .brand small{display:block;font-weight:500;font-size:10.5px;color:#7f93ad;letter-spacing:.04em}
+  .nav{padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:9px;color:var(--sidebar-ink);text-decoration:none;font-size:13px;cursor:pointer;transition:background .12s}
+  .nav a .ic{width:18px;text-align:center;opacity:.9}
+  .nav a:hover{background:#16263c}
+  .nav a.active{background:var(--sidebar-active);color:#fff;font-weight:600}
+  .nav a .count{margin-left:auto;background:#22374f;color:#cdd9ea;border-radius:20px;font-size:11px;padding:1px 8px;font-weight:600}
+  .nav a.active .count{background:#2f5580}
+  .sidebar .foot{margin-top:auto;padding:14px 18px;font-size:11px;border-top:1px solid #1a2a40;color:#63789a}
+
+  /* ---------- Main ---------- */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:20}
+  .topbar h1{font-size:15px;margin:0;font-weight:700;white-space:nowrap}
+  .path-wrap{flex:1;display:flex;gap:8px;align-items:center;max-width:720px}
+  .path-wrap input{flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:9px;font-size:13px;background:#fbfcfe;color:var(--ink)}
+  .path-wrap input:focus{outline:none;border-color:var(--accent);background:#fff}
+  .btn{border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:filter .12s}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.primary:hover{filter:brightness(1.06)}
+  .btn.primary:disabled{opacity:.55;cursor:default}
+  .btn.ghost{background:#eef2f8;color:#33415a}
+  .content{padding:22px 24px 60px;max-width:1240px;width:100%}
+
+  .view{display:none} .view.active{display:block}
+  .page-title{font-size:19px;font-weight:700;margin:0 0 2px}
+  .page-sub{color:var(--muted);font-size:12.5px;margin:0 0 18px}
+
+  /* cards */
+  .grid{display:grid;gap:16px}
+  .cards-4{grid-template-columns:repeat(4,1fr)}
+  .cards-3{grid-template-columns:repeat(3,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card.p{padding:18px}
+  .stat .label{color:var(--muted);font-size:12px;margin-bottom:6px;font-weight:600;letter-spacing:.01em}
+  .stat .num{font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1}
+  .stat .foot{color:var(--muted);font-size:11.5px;margin-top:8px}
+
+  /* severity summary */
+  .sev-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:2px}
+  .sev-card{border-radius:var(--radius);padding:16px 16px 14px;border:1px solid var(--line);background:var(--panel);position:relative;overflow:hidden}
+  .sev-card .top{display:flex;align-items:center;gap:8px;font-weight:700;font-size:12.5px}
+  .sev-card .dot{width:11px;height:11px;border-radius:50%}
+  .sev-card .n{font-size:32px;font-weight:800;margin-top:8px;line-height:1}
+  .sev-card .bar{height:4px;border-radius:4px;margin-top:12px;background:var(--line)}
+  .sev-card .bar > i{display:block;height:100%;border-radius:4px}
+
+  .dot.CRITICAL,.bar-CRITICAL{background:var(--crit)} .dot.HIGH,.bar-HIGH{background:var(--high)}
+  .dot.MEDIUM,.bar-MEDIUM{background:var(--med)} .dot.LOW,.bar-LOW{background:var(--low)} .dot.INFO,.bar-INFO{background:var(--info)}
+
+  .section-h{font-size:14px;font-weight:700;margin:26px 0 12px;display:flex;align-items:center;gap:10px}
+  .section-h .hint{font-weight:500;color:var(--muted);font-size:12px}
+
+  /* distribution bar */
+  .distbar{display:flex;height:26px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+  .distbar > div{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;min-width:0}
+  .dist-legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:12px;color:#3a4658}
+  .dist-legend span{display:inline-flex;align-items:center;gap:7px}
+  .dist-legend i{width:10px;height:10px;border-radius:3px}
+
+  /* chips */
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{display:inline-flex;align-items:center;gap:8px;background:#f2f5fa;border:1px solid var(--line);border-radius:20px;padding:6px 14px;font-size:12.5px;font-weight:600}
+  .chip b{font-weight:800}
+
+  /* table */
+  .tablewrap{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{text-align:left;padding:11px 14px;background:#f7f9fc;color:#5a6a82;font-weight:700;font-size:11.5px;letter-spacing:.02em;border-bottom:1px solid var(--line);white-space:nowrap}
+  tbody td{padding:12px 14px;border-bottom:1px solid #eef1f6;vertical-align:top}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fafbfe}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:800;letter-spacing:.02em}
+  .badge.CRITICAL{background:var(--crit-bg);color:#a3005a} .badge.HIGH{background:var(--high-bg);color:#c53a10}
+  .badge.MEDIUM{background:var(--med-bg);color:#95650a} .badge.LOW{background:var(--low-bg);color:#1d5fbf} .badge.INFO{background:var(--info-bg);color:#586376}
+  .cat-tag{font-size:11px;color:#5a6a82;background:#eef1f6;border-radius:5px;padding:2px 8px;font-weight:600;white-space:nowrap}
+  .loc{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#3a4658;word-break:break-all}
+  .fx-title{font-weight:600}
+  .fx-desc{color:var(--muted);font-size:12px;margin-top:3px}
+  .fx-rec{color:#256b4a;font-size:12px;margin-top:5px}
+  .fx-rec::before{content:"▸ 対応: ";font-weight:700}
+  a.ref{color:var(--accent);font-size:11.5px;text-decoration:none;display:block;word-break:break-all}
+  a.ref:hover{text-decoration:underline}
+
+  /* filters */
+  .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+  .filters input[type=text]{padding:8px 12px;border:1px solid var(--line);border-radius:9px;font-size:13px;min-width:220px;background:#fff}
+  .fbtn{padding:6px 12px;border:1px solid var(--line);background:#fff;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .fbtn[data-on="0"]{opacity:.45}
+  .fbtn i{width:9px;height:9px;border-radius:50%}
+
+  /* states */
+  .state{background:var(--panel);border:1px dashed #d3dae5;border-radius:16px;padding:60px 30px;text-align:center;color:var(--muted)}
+  .state .big{font-size:44px;margin-bottom:10px}
+  .state h3{color:var(--ink);margin:0 0 6px;font-size:17px}
+  .spinner{width:34px;height:34px;border:3.5px solid #e3e9f2;border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 16px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .banner{border-radius:10px;padding:11px 14px;font-size:12.5px;margin-bottom:16px;display:flex;gap:9px;align-items:flex-start}
+  .banner.warn{background:#fff8e6;border:1px solid #f5df9e;color:#7a5b00}
+  .banner.info{background:#eef4ff;border:1px solid #cfe0ff;color:#274d94}
+  .muted{color:var(--muted)} .hidden{display:none!important}
+  .empty-row td{text-align:center;color:var(--muted);padding:34px}
+  @media(max-width:960px){.cards-4{grid-template-columns:repeat(2,1fr)}.sev-row{grid-template-columns:repeat(3,1fr)}.sidebar{display:none}}
+</style>
+</head>
+<body data-palette="#d81b7a,#f4511e,#f5a623,#2e90fa,#98a2b3">
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="logo">🛡️</span>
+      <div>Securify Local<small>ローカル脆弱性スキャナ</small></div>
+    </div>
+    <nav class="nav" id="nav">
+      <a data-view="dashboard" class="active"><span class="ic">📊</span>ダッシュボード</a>
+      <a data-view="vulns"><span class="ic">⚠️</span>脆弱性一覧<span class="count" id="c-vulns">0</span></a>
+      <a data-view="sbom"><span class="ic">📦</span>SBOM管理<span class="count" id="c-sbom">0</span></a>
+      <a data-view="static"><span class="ic">🔎</span>静的解析<span class="count" id="c-static">0</span></a>
+      <a data-view="config"><span class="ic">⚙️</span>設定診断<span class="count" id="c-config">0</span></a>
+    </nav>
+    <div class="foot" id="foot">未スキャン</div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <h1>🛡️ Securify Local</h1>
+      <div class="path-wrap">
+        <input id="path" type="text" placeholder="スキャンするフォルダの絶対パス (例: /Users/you/project)" spellcheck="false">
+        <button class="btn primary" id="scanBtn" onclick="startScan()">スキャン実行</button>
+      </div>
+      <span class="muted" id="topStatus"></span>
+    </div>
+
+    <div class="content">
+      <!-- initial / loading state -->
+      <div id="gate">
+        <div class="state" id="emptyState">
+          <div class="big">🛡️</div>
+          <h3>フォルダを指定してスキャンを開始</h3>
+          <p>上部の入力欄にプロジェクトフォルダの絶対パスを入れ、「スキャン実行」を押してください。<br>
+          依存関係(SBOM/CVE)・静的コード解析・設定ファイル診断を一度に実行します。</p>
+        </div>
+        <div class="state hidden" id="loadingState">
+          <div class="spinner"></div>
+          <h3>スキャン中…</h3>
+          <p id="loadingMsg">ファイルを走査し、依存関係をOSVデータベースと照合しています。</p>
+        </div>
+        <div class="state hidden" id="errorState">
+          <div class="big">⚠️</div>
+          <h3>スキャンできませんでした</h3>
+          <p id="errorMsg"></p>
+        </div>
+      </div>
+
+      <!-- results -->
+      <div id="results" class="hidden">
+        <div id="osvBanner" class="banner warn hidden">
+          <span>ⓘ</span><span>OSVデータベースに接続できなかったため、依存関係の既知脆弱性(CVE)照合はスキップされました。SBOM一覧は取得済みです。インターネット接続を確認して再スキャンしてください。</span>
+        </div>
+
+        <!-- DASHBOARD -->
+        <section class="view active" data-view="dashboard">
+          <h2 class="page-title">ダッシュボード</h2>
+          <p class="page-sub" id="dashSub"></p>
+
+          <div class="grid cards-4">
+            <div class="card p stat"><div class="label">スキャンファイル数</div><div class="num" id="s-files">0</div><div class="foot">走査対象ファイル</div></div>
+            <div class="card p stat"><div class="label">コンポーネント数</div><div class="num" id="s-comps">0</div><div class="foot" id="s-eco">—</div></div>
+            <div class="card p stat"><div class="label">脆弱な依存</div><div class="num" id="s-vulncomp" style="color:var(--high)">0</div><div class="foot">CVEが報告された依存</div></div>
+            <div class="card p stat"><div class="label">検出総数</div><div class="num" id="s-total">0</div><div class="foot" id="s-elapsed">—</div></div>
+          </div>
+
+          <div class="section-h">脆弱性の総件数 <span class="hint">重要度別</span></div>
+          <div class="sev-row" id="sevRow"></div>
+
+          <div class="section-h">重要度の分布</div>
+          <div class="card p">
+            <div class="distbar" id="distbar"></div>
+            <div class="dist-legend" id="distLegend"></div>
+          </div>
+
+          <div class="section-h">連携（検出されたエコシステム）</div>
+          <div class="chips" id="ecoChips"></div>
+
+          <div class="section-h">重要度の高い検出 <span class="hint">上位10件</span></div>
+          <div class="tablewrap">
+            <table><thead><tr><th style="width:96px">重要度</th><th style="width:92px">種別</th><th>内容</th><th style="width:240px">場所</th></tr></thead>
+            <tbody id="topFindings"></tbody></table>
+          </div>
+        </section>
+
+        <!-- VULNS (all findings) -->
+        <section class="view" data-view="vulns">
+          <h2 class="page-title">脆弱性一覧</h2>
+          <p class="page-sub">全カテゴリの検出結果。重要度・種別・キーワードで絞り込めます。</p>
+          <div class="filters" id="vFilters">
+            <input type="text" id="vSearch" placeholder="キーワード検索（タイトル/ファイル/パッケージ）" oninput="renderVulns()">
+            <span id="sevFilters"></span>
+            <span id="catFilters"></span>
+          </div>
+          <div class="tablewrap">
+            <table><thead><tr>
+              <th style="width:92px">重要度</th><th style="width:84px">種別</th><th>内容</th>
+              <th style="width:230px">場所</th><th style="width:170px">参照</th>
+            </tr></thead><tbody id="vulnBody"></tbody></table>
+          </div>
+        </section>
+
+        <!-- SBOM -->
+        <section class="view" data-view="sbom">
+          <h2 class="page-title">SBOM管理</h2>
+          <p class="page-sub">検出された全依存コンポーネント（Software Bill of Materials）。</p>
+          <div class="filters">
+            <input type="text" id="sbomSearch" placeholder="パッケージ名で検索" oninput="renderSbom()">
+            <label class="muted" style="font-size:12px"><input type="checkbox" id="sbomVulnOnly" onchange="renderSbom()"> 脆弱性ありのみ表示</label>
+          </div>
+          <div class="tablewrap">
+            <table><thead><tr>
+              <th>コンポーネント</th><th style="width:130px">バージョン</th><th style="width:100px">エコシステム</th>
+              <th style="width:90px">スコープ</th><th style="width:110px">脆弱性</th><th style="width:220px">検出元</th>
+            </tr></thead><tbody id="sbomBody"></tbody></table>
+          </div>
+        </section>
+
+        <!-- STATIC -->
+        <section class="view" data-view="static">
+          <h2 class="page-title">静的解析</h2>
+          <p class="page-sub">ソースコード中のハードコードされた秘密情報・危険な関数・安全でない実装。</p>
+          <div class="tablewrap">
+            <table><thead><tr><th style="width:92px">重要度</th><th>内容</th><th style="width:280px">場所</th></tr></thead>
+            <tbody id="staticBody"></tbody></table>
+          </div>
+        </section>
+
+        <!-- CONFIG -->
+        <section class="view" data-view="config">
+          <h2 class="page-title">設定診断</h2>
+          <p class="page-sub">Dockerfile / docker-compose / IaC(Terraform) / Kubernetes / CI設定などのセキュリティ設定ミス。</p>
+          <div class="tablewrap">
+            <table><thead><tr><th style="width:92px">重要度</th><th>内容</th><th style="width:280px">場所</th></tr></thead>
+            <tbody id="configBody"></tbody></table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const SEV = ["CRITICAL","HIGH","MEDIUM","LOW","INFO"];
+const SEV_COLOR = {CRITICAL:"#d81b7a",HIGH:"#f4511e",MEDIUM:"#f5a623",LOW:"#2e90fa",INFO:"#98a2b3"};
+const CAT_LABEL = {dependency:"依存関係",static:"静的解析",config:"設定"};
+let DATA = null;
+const sevOn = {CRITICAL:1,HIGH:1,MEDIUM:1,LOW:1,INFO:1};
+const catOn = {dependency:1,static:1,config:1};
+
+// nav
+document.querySelectorAll('#nav a').forEach(a=>{
+  a.addEventListener('click',()=>{
+    if(!DATA) return;
+    document.querySelectorAll('#nav a').forEach(x=>x.classList.remove('active'));
+    a.classList.add('active');
+    const v=a.dataset.view;
+    document.querySelectorAll('.view').forEach(s=>s.classList.toggle('active',s.dataset.view===v));
+  });
+});
+
+async function loadDefaultPath(){
+  try{const r=await fetch('/api/default-path');const d=await r.json();
+    if(d.path && !document.getElementById('path').value) document.getElementById('path').value=d.path;}catch(e){}
+}
+loadDefaultPath();
+document.getElementById('path').addEventListener('keydown',e=>{if(e.key==='Enter')startScan();});
+
+function show(id){['emptyState','loadingState','errorState'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id));}
+
+async function startScan(){
+  const path=document.getElementById('path').value.trim();
+  if(!path){alert('フォルダのパスを入力してください');return;}
+  document.getElementById('results').classList.add('hidden');
+  document.getElementById('gate').classList.remove('hidden');
+  show('loadingState');
+  document.getElementById('scanBtn').disabled=true;
+  document.getElementById('topStatus').textContent='スキャン中…';
+  try{
+    const r=await fetch('/api/scan?path='+encodeURIComponent(path));
+    const d=await r.json();
+    if(!r.ok){throw new Error(d.error||'不明なエラー');}
+    DATA=d; render();
+  }catch(e){
+    document.getElementById('errorMsg').textContent=e.message;
+    show('errorState');
+    document.getElementById('topStatus').textContent='';
+  }finally{
+    document.getElementById('scanBtn').disabled=false;
+  }
+}
+
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function locOf(f){
+  if(f.category==='dependency' && f.package) return esc(f.package)+' @ '+esc(f.version)+'<br><span class="muted">'+esc(f.file)+'</span>';
+  return esc(f.file)+(f.line?':'+f.line:'');
+}
+
+function render(){
+  const s=DATA.summary;
+  document.getElementById('gate').classList.add('hidden');
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('topStatus').textContent='完了 · '+DATA.scanned_at;
+  document.getElementById('foot').innerHTML='対象:<br>'+esc(DATA.target.split('/').slice(-2).join('/'));
+
+  // counts in nav
+  document.getElementById('c-vulns').textContent=s.total_findings;
+  document.getElementById('c-sbom').textContent=s.total_components;
+  document.getElementById('c-static').textContent=s.category_counts.static||0;
+  document.getElementById('c-config').textContent=s.category_counts.config||0;
+
+  // OSV banner
+  document.getElementById('osvBanner').classList.toggle('hidden',DATA.osv_online);
+
+  // stat cards
+  document.getElementById('dashSub').textContent='対象: '+DATA.target+' ／ '+DATA.scanned_at+' にスキャン';
+  document.getElementById('s-files').textContent=s.total_files;
+  document.getElementById('s-comps').textContent=s.total_components;
+  document.getElementById('s-eco').textContent=Object.entries(s.ecosystems).map(([k,v])=>k+' '+v).join(' · ')||'依存なし';
+  document.getElementById('s-vulncomp').textContent=s.vulnerable_components;
+  document.getElementById('s-total').textContent=s.total_findings;
+  document.getElementById('s-elapsed').textContent=DATA.elapsed_sec+' 秒で完了';
+
+  // severity cards
+  const sc=s.severity_counts;const maxSev=Math.max(1,...SEV.map(k=>sc[k]));
+  document.getElementById('sevRow').innerHTML=SEV.map(k=>`
+    <div class="sev-card">
+      <div class="top"><span class="dot ${k}"></span>${k}</div>
+      <div class="n" style="color:${SEV_COLOR[k]}">${sc[k]}</div>
+      <div class="bar"><i class="bar-${k}" style="width:${sc[k]/maxSev*100}%"></i></div>
+    </div>`).join('');
+
+  // distribution bar
+  const total=s.total_findings||1;
+  document.getElementById('distbar').innerHTML=SEV.filter(k=>sc[k]>0).map(k=>
+    `<div style="background:${SEV_COLOR[k]};flex:${sc[k]}" title="${k}: ${sc[k]}">${sc[k]/total>0.06?sc[k]:''}</div>`).join('')
+    || '<div style="background:var(--info);flex:1;color:#fff">検出なし</div>';
+  document.getElementById('distLegend').innerHTML=SEV.map(k=>
+    `<span><i style="background:${SEV_COLOR[k]}"></i>${k} <b>${sc[k]}</b> (${Math.round(sc[k]/total*100)}%)</span>`).join('');
+
+  // ecosystem chips
+  const eco=s.ecosystems;
+  document.getElementById('ecoChips').innerHTML=Object.keys(eco).length?
+    Object.entries(eco).map(([k,v])=>`<span class="chip">${esc(k)} <b>${v}</b></span>`).join('')
+    +`<span class="chip">脆弱な依存 <b style="color:var(--high)">${s.vulnerable_components}</b></span>`
+    :'<span class="muted">依存関係マニフェストは見つかりませんでした。</span>';
+
+  // top findings
+  document.getElementById('topFindings').innerHTML=DATA.findings.slice(0,10).map(f=>`
+    <tr><td><span class="badge ${f.severity}"><span class="dot ${f.severity}" style="width:7px;height:7px"></span>${f.severity}</span></td>
+    <td><span class="cat-tag">${CAT_LABEL[f.category]}</span></td>
+    <td><div class="fx-title">${esc(f.title)}</div>${f.description?`<div class="fx-desc">${esc(f.description)}</div>`:''}</td>
+    <td class="loc">${locOf(f)}</td></tr>`).join('')||'<tr class="empty-row"><td colspan="4">検出はありませんでした 🎉</td></tr>';
+
+  buildFilterButtons();
+  renderVulns(); renderSbom(); renderCat('static'); renderCat('config');
+}
+
+function buildFilterButtons(){
+  document.getElementById('sevFilters').innerHTML=SEV.map(k=>
+    `<button class="fbtn" data-on="1" onclick="toggleSev('${k}',this)"><i style="background:${SEV_COLOR[k]}"></i>${k}</button>`).join('');
+  document.getElementById('catFilters').innerHTML=Object.keys(catOn).map(k=>
+    `<button class="fbtn" data-on="1" onclick="toggleCat('${k}',this)">${CAT_LABEL[k]}</button>`).join('');
+}
+function toggleSev(k,el){sevOn[k]=sevOn[k]?0:1;el.dataset.on=sevOn[k];renderVulns();}
+function toggleCat(k,el){catOn[k]=catOn[k]?0:1;el.dataset.on=catOn[k];renderVulns();}
+
+function findingRow(f,showCat=true){
+  const refs=(f.references||[]).slice(0,3).map(u=>`<a class="ref" href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\//,''))}</a>`).join('');
+  return `<tr>
+    <td><span class="badge ${f.severity}">${f.severity}</span></td>
+    ${showCat?`<td><span class="cat-tag">${CAT_LABEL[f.category]}</span></td>`:''}
+    <td><div class="fx-title">${esc(f.title)}</div>
+        ${f.description?`<div class="fx-desc">${esc(f.description)}</div>`:''}
+        ${f.recommendation?`<div class="fx-rec">${esc(f.recommendation)}</div>`:''}</td>
+    <td class="loc">${locOf(f)}</td>
+    ${showCat?`<td>${refs||'<span class="muted">—</span>'}</td>`:''}
+  </tr>`;
+}
+
+function renderVulns(){
+  const q=(document.getElementById('vSearch').value||'').toLowerCase();
+  const rows=DATA.findings.filter(f=>sevOn[f.severity]&&catOn[f.category]&&
+    (!q||(f.title+f.file+f.package+f.description).toLowerCase().includes(q)));
+  document.getElementById('vulnBody').innerHTML=rows.map(f=>findingRow(f,true)).join('')
+    ||'<tr class="empty-row"><td colspan="5">条件に一致する検出はありません。</td></tr>';
+}
+
+function renderCat(cat){
+  const rows=DATA.findings.filter(f=>f.category===cat);
+  document.getElementById(cat+'Body').innerHTML=rows.map(f=>findingRow(f,false)).join('')
+    ||`<tr class="empty-row"><td colspan="3">${cat==='static'?'コードの問題は検出されませんでした 🎉':'設定の問題は検出されませんでした 🎉'}</td></tr>`;
+}
+
+function renderSbom(){
+  const q=(document.getElementById('sbomSearch').value||'').toLowerCase();
+  const vulnOnly=document.getElementById('sbomVulnOnly').checked;
+  const rows=DATA.components.filter(c=>(!q||c.name.toLowerCase().includes(q))&&(!vulnOnly||c.vuln_count>0));
+  document.getElementById('sbomBody').innerHTML=rows.map(c=>`
+    <tr>
+      <td class="fx-title">${esc(c.name)}</td>
+      <td class="loc">${esc(c.version)}</td>
+      <td><span class="cat-tag">${esc(c.ecosystem)}</span></td>
+      <td><span class="muted">${c.scope==='dev'?'dev':'runtime'}</span></td>
+      <td>${c.vuln_count>0?`<span class="badge ${c.max_severity}">${c.vuln_count} 件</span>`:'<span class="muted">なし</span>'}</td>
+      <td class="loc">${esc(c.file)}</td>
+    </tr>`).join('')||'<tr class="empty-row"><td colspan="6">依存コンポーネントは見つかりませんでした。</td></tr>';
+}
+</script>
+</body>
+</html>
