@@ -20,10 +20,14 @@ dist/
 .coverage
 htmlcov/
 
-# --- Securia のスキャン出力 ---
-# `python3 run.py --cli <path> --out report.json` の生成物
+# --- Securia の生成物 ---
+# `securia scan <path> --out report.json` の出力
 report.json
 *.report.json
+# 履歴 DB（--db でこの場所を指定した場合）
+securia.db
+securia.db-wal
+securia.db-shm
 
 # --- OS ---
 .DS_Store

@@ -1,0 +1,58 @@
+# Securia の設定例。
+#
+# このファイルを securia.toml としてプロジェクト直下に置くか、
+# ~/.config/securia/config.toml に置くと読み込まれます。
+# すべての項目は省略可能で、設定が無くても既定値だけで動きます。
+
+[scan]
+# スキャンを許可するディレクトリ。ブラウザから任意のパスを渡されても
+# ここより外は読ませないための境界です。既定はホームディレクトリのみ。
+# 空リスト [] にすると制限なしになります（意味を理解した上でどうぞ）。
+allowed_roots = ["~"]
+
+# 既定の除外ディレクトリ（node_modules, .git, venv, dist ...）に追加する名前。
+skip_dirs = []
+
+# 相対パスに対する glob で除外する。
+skip_globs = []
+
+# これを超えるサイズのファイルは読まない（バイト）。
+max_file_bytes = 2097152
+
+# シンボリックリンクを辿るか。既定は辿らない（無限ループと想定外の範囲を避ける）。
+follow_symlinks = false
+
+
+[rules]
+# うるさいルールを黙らせる。glob が使えます。
+# 使えるルール ID は `securia rules` で確認できます。
+disabled = [
+    # "code.http_url",
+    # "code.insecure_random",
+    # "secret.*",
+]
+
+[rules.severity]
+# 既定の重要度を上書きする。CRITICAL / HIGH / MEDIUM / LOW / INFO。
+# "code.weak_hash" = "INFO"
+# "code.*" = "LOW"
+
+
+[osv]
+# OSV.dev への問い合わせ。無効にすると完全オフラインで動き、
+# SBOM 一覧・静的解析・設定診断のみ実行されます。
+enabled = true
+
+# 1リクエストのタイムアウト（秒）。
+timeout = 20
+
+# 脆弱性詳細を取得する際の並列数。
+max_workers = 8
+
+# 取得した脆弱性レコードをキャッシュする日数。
+cache_ttl_days = 7
+
+
+[server]
+port = 8787
+open_browser = true
