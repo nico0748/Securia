@@ -1,7 +1,7 @@
-# 🛡️ Securify Local — ローカル脆弱性スキャナ
+# 🛡️ Securia Local — ローカル脆弱性スキャナ
 
 指定したフォルダ内のアプリケーションを、ローカルで脆弱性スキャンして
-Securify 風のダッシュボードで表示するツールです。
+Securia 風のダッシュボードで表示するツールです。
 **Python 標準ライブラリのみ**で動作し、追加インストールは不要です。
 
 3 種類のスキャンを一度に実行します。
@@ -20,7 +20,7 @@ Python 3.8 以上が入っていれば、それだけで動きます。
 
 ```bash
 # 1. 解凍したフォルダに移動
-cd securify-local
+cd securia-local
 
 # 2. 起動（ブラウザが自動で開きます）
 python3 run.py
@@ -67,8 +67,9 @@ CI に組み込んで JSON を後段で処理する、といった使い方も�
 ## 構成
 
 ```
-securify-local/
+securia-local/
 ├── run.py                 # 起動スクリプト（HTTPサーバー / CLI）
+├── run.sh                 # 起動用ラッパー（bash）
 ├── web/
 │   └── index.html         # ダッシュボード UI（単一ファイル）
 ├── scanner/
@@ -79,6 +80,8 @@ securify-local/
 │   ├── cvss.py            # CVSS v3 スコア算出
 │   ├── models.py          # データモデル
 │   └── util.py            # ファイル探索ユーティリティ
+├── .gitignore
+├── LICENSE                # MIT
 └── README.md
 ```
 
@@ -91,4 +94,6 @@ securify-local/
 - 対応エコシステムを増やす場合は `scanner/dependency.py` にパーサを追加してください
   （OSV は Maven / RubyGems / crates.io / NuGet 等にも対応しています）。
 
-MIT ライセンス相当・自由に改変してご利用ください。
+## ライセンス
+
+MIT License — 詳細は [LICENSE](LICENSE) を参照してください。自由に改変してご利用ください。
