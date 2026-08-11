@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="securia-token" content="__SECURIA_TOKEN__">
+<title>Securia — ローカル脆弱性スキャナ</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="logo">🛡️</span>
+      <div>Securia<small>ローカル脆弱性スキャナ</small></div>
+    </div>
+    <nav class="nav" id="nav" aria-label="セクション">
+      <button data-view="dashboard" aria-current="page"><span class="ic">📊</span>ダッシュボード</button>
+      <button data-view="findings"><span class="ic">⚠️</span>検出一覧<span class="count" id="c-findings">0</span></button>
+      <button data-view="sbom"><span class="ic">📦</span>SBOM<span class="count" id="c-sbom">0</span></button>
+      <button data-view="static"><span class="ic">🔎</span>静的解析<span class="count" id="c-static">0</span></button>
+      <button data-view="config"><span class="ic">⚙️</span>設定診断<span class="count" id="c-config">0</span></button>
+      <button data-view="history"><span class="ic">🕘</span>履歴</button>
+      <button data-view="suppressions"><span class="ic">🔕</span>抑制<span class="count" id="c-sup">0</span></button>
+    </nav>
+    <div class="foot" id="foot">未スキャン</div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <h1>🛡️ Securia</h1>
+      <div class="path-wrap">
+        <input id="path" type="text" spellcheck="false" aria-label="スキャン対象フォルダの絶対パス"
+               placeholder="スキャンするフォルダの絶対パス (例: /Users/you/project)">
+        <button class="btn primary" id="scanBtn">スキャン実行</button>
+        <button class="btn ghost" id="cancelBtn" hidden>中断</button>
+      </div>
+      <span class="muted" id="topStatus"></span>
+    </div>
+    <div class="progress-bar" id="progressBar" hidden><i style="width:0"></i></div>
+
+    <div class="content">
+      <div id="gate">
+        <div class="state" id="emptyState">
+          <div class="big">🛡️</div>
+          <h3>フォルダを指定してスキャンを開始</h3>
+          <p>上部の入力欄にプロジェクトフォルダの絶対パスを入れ、「スキャン実行」を押してください。<br>
+             依存関係(SBOM/CVE)・静的コード解析・設定ファイル診断を一度に実行します。</p>
+          <p class="muted" id="knownTargets"></p>
+        </div>
+        <div class="state" id="loadingState" hidden>
+          <div class="spinner"></div>
+          <h3 id="loadingPhase">スキャン中…</h3>
+          <p id="loadingDetail" class="muted"></p>
+        </div>
+        <div class="state" id="errorState" hidden>
+          <div class="big">⚠️</div>
+          <h3>スキャンできませんでした</h3>
+          <p id="errorMsg" style="white-space:pre-wrap"></p>
+        </div>
+      </div>
+
+      <div id="results" hidden>
+        <div id="osvBanner" class="banner warn" hidden></div>
+
+        <!-- ダッシュボード -->
+        <section class="view" data-view="dashboard">
+          <h2 class="page-title">ダッシュボード</h2>
+          <p class="page-sub" id="dashSub"></p>
+
+          <div class="diff-row" id="diffRow"></div>
+
+          <div class="grid cards-4">
+            <div class="card p stat"><div class="label">スキャンファイル数</div><div class="num" id="s-files">0</div><div class="foot">走査対象ファイル</div></div>
+            <div class="card p stat"><div class="label">コンポーネント数</div><div class="num" id="s-comps">0</div><div class="foot" id="s-eco">—</div></div>
+            <div class="card p stat"><div class="label">脆弱な依存</div><div class="num" id="s-vulncomp" style="color:var(--high)">0</div><div class="foot">CVEが報告された依存</div></div>
+            <div class="card p stat"><div class="label">検出総数</div><div class="num" id="s-total">0</div><div class="foot" id="s-elapsed">—</div></div>
+          </div>
+
+          <div class="section-h">重要度別の件数</div>
+          <div class="sev-row" id="sevRow"></div>
+
+          <div class="section-h">重要度の分布</div>
+          <div class="card p">
+            <div class="distbar" id="distbar"></div>
+            <div class="dist-legend" id="distLegend"></div>
+          </div>
+
+          <div class="section-h">検出されたエコシステム</div>
+          <div class="chips" id="ecoChips"></div>
+
+          <div class="section-h">重要度の高い検出 <span class="hint">上位10件</span></div>
+          <div class="tablewrap scroll-x">
+            <table>
+              <thead><tr><th style="width:96px">重要度</th><th style="width:92px">種別</th><th>内容</th><th style="width:240px">場所</th></tr></thead>
+              <tbody id="topFindings"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 検出一覧 -->
+        <section class="view" data-view="findings" hidden>
+          <h2 class="page-title">検出一覧</h2>
+          <p class="page-sub">行をクリックすると該当箇所のコードと詳細を表示します。</p>
+          <div class="filters">
+            <input type="text" id="fSearch" placeholder="キーワード検索（タイトル/ファイル/パッケージ）">
+            <span id="sevFilters"></span>
+            <span id="catFilters"></span>
+            <label class="check"><input type="checkbox" id="fNewOnly"> 新規のみ</label>
+            <label class="check"><input type="checkbox" id="fShowSuppressed"> 抑制済みも表示</label>
+          </div>
+          <div class="tablewrap scroll-x">
+            <table>
+              <thead><tr>
+                <th style="width:92px">重要度</th><th style="width:84px">種別</th><th>内容</th>
+                <th style="width:220px">場所</th><th style="width:96px"></th>
+              </tr></thead>
+              <tbody id="findingsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- SBOM -->
+        <section class="view" data-view="sbom" hidden>
+          <h2 class="page-title">SBOM</h2>
+          <p class="page-sub">検出された全依存コンポーネント（Software Bill of Materials）。</p>
+          <div class="filters">
+            <input type="text" id="sbomSearch" placeholder="パッケージ名で検索">
+            <label class="check"><input type="checkbox" id="sbomVulnOnly"> 脆弱性ありのみ</label>
+          </div>
+          <div class="tablewrap scroll-x">
+            <table>
+              <thead><tr>
+                <th>コンポーネント</th><th style="width:130px">バージョン</th><th style="width:100px">エコシステム</th>
+                <th style="width:90px">スコープ</th><th style="width:110px">脆弱性</th><th style="width:220px">検出元</th>
+              </tr></thead>
+              <tbody id="sbomBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 静的解析 -->
+        <section class="view" data-view="static" hidden>
+          <h2 class="page-title">静的解析</h2>
+          <p class="page-sub">ソースコード中のハードコードされた秘密情報・危険な関数・安全でない実装。</p>
+          <div class="tablewrap scroll-x">
+            <table>
+              <thead><tr><th style="width:92px">重要度</th><th>内容</th><th style="width:260px">場所</th><th style="width:96px"></th></tr></thead>
+              <tbody id="staticBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 設定診断 -->
+        <section class="view" data-view="config" hidden>
+          <h2 class="page-title">設定診断</h2>
+          <p class="page-sub">Dockerfile / docker-compose / Terraform / Kubernetes / GitHub Actions などの設定ミス。</p>
+          <div class="tablewrap scroll-x">
+            <table>
+              <thead><tr><th style="width:92px">重要度</th><th>内容</th><th style="width:260px">場所</th><th style="width:96px"></th></tr></thead>
+              <tbody id="configBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- 履歴（スキャン結果が無くても見られる） -->
+      <section class="view" data-view="history" hidden>
+        <h2 class="page-title">スキャン履歴</h2>
+        <p class="page-sub">過去のスキャン結果。行をクリックするとその結果を読み込みます。</p>
+        <div class="tablewrap scroll-x">
+          <table>
+            <thead><tr>
+              <th style="width:60px">ID</th><th style="width:200px">日時</th><th style="width:80px">検出</th>
+              <th style="width:70px">CRIT</th><th style="width:70px">HIGH</th><th>対象</th>
+            </tr></thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 抑制 -->
+      <section class="view" data-view="suppressions" hidden>
+        <h2 class="page-title">抑制した検出</h2>
+        <p class="page-sub">誤検知として非表示にした検出。解除すると次回スキャンから再び集計されます。</p>
+        <div class="tablewrap scroll-x">
+          <table>
+            <thead><tr>
+              <th style="width:150px">fingerprint</th><th style="width:200px">ルール</th>
+              <th>ファイル / 理由</th><th style="width:96px"></th>
+            </tr></thead>
+            <tbody id="supBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>
