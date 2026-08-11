@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "securia"
-version = "0.2.0"
+version = "0.3.0"
 description = "ローカルで完結する脆弱性スキャナ（依存関係・静的コード・設定ファイル）"
 readme = "README.md"
 license = { file = "LICENSE" }

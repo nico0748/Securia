@@ -57,6 +57,7 @@ securia suppress      検出を抑制する
 securia unsuppress    抑制を解除する
 securia suppressions  抑制の一覧を表示する
 securia rules         設定で参照できるルール ID を一覧する
+securia mcp           MCP サーバーとして動作する（stdio。Claude から使う）
 ```
 
 ### serve
@@ -90,6 +91,80 @@ securia unsuppress 57a7a44fed5ee769 --target ~/work/myapp
 ```
 
 抑制は fingerprint 単位で、**対象フォルダごと**に効きます。別プロジェクトの同じパターンは消えません。
+
+---
+
+## MCP サーバー（Claude から使う）
+
+Securia は [MCP](https://modelcontextprotocol.io) サーバーとしても動きます。Claude に接続すると、
+Claude 自身が「スキャンして、怪しい検出のコードを読んで、誤検知なら抑制する」という調査を
+一通り行えるようになります。
+
+プロトコルは標準ライブラリだけで実装しており、**MCP のためだけに依存が増えることはありません**。
+
+### 設定
+
+**Claude Code:**
+
+```bash
+claude mcp add securia -- securia mcp
+```
+
+**Claude Desktop** — `claude_desktop_config.json` に追記します。
+
+```json
+{
+  "mcpServers": {
+    "securia": {
+      "command": "securia",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+インストールせずに使う場合は、リポジトリを指定します。
+
+```json
+{
+  "mcpServers": {
+    "securia": {
+      "command": "python3",
+      "args": ["-m", "securia", "mcp"],
+      "env": { "PYTHONPATH": "/path/to/Securia/src" }
+    }
+  }
+}
+```
+
+設定ファイルや DB を指定したい場合は `args` に `--config` / `--db` を足してください。
+
+### 提供するツール
+
+| ツール | 用途 |
+|--------|------|
+| `securia_scan` | ディレクトリをスキャンし、要約と重要度の高い検出を返す |
+| `securia_list_findings` | 検出を重要度・種別・ルール・ファイル・新規かどうかで絞り込む |
+| `securia_get_finding` | 1件の詳細と、該当箇所のソースコードを表示する |
+| `securia_list_components` | SBOM（依存コンポーネント）を一覧する |
+| `securia_scan_history` | 過去のスキャンを一覧する |
+| `securia_suppress` / `securia_unsuppress` | 誤検知を抑制・解除する |
+| `securia_list_suppressions` | 抑制中の検出を一覧する |
+| `securia_list_rules` | 検出ルール ID を一覧する |
+
+リソースとして `securia://rules`（ルール一覧）と `securia://scans/{id}`（スキャン結果の完全な JSON）も
+公開しています。
+
+### 設計上の注意
+
+- **文脈の経済性** — 実リポジトリのスキャンは数百件の検出を出します。`securia_scan` は要約と
+  上位数件だけを返し、続きは絞り込みとページング付きの `securia_list_findings` で取る作りです。
+- **`allowed_roots` は MCP 経由でも効きます。** Claude に任意のディレクトリを読ませることには
+  なりません。範囲外を指定するとエラーが返ります。
+- **抑制は状態を変えます。** ツールの説明で「抑制する前に `securia_get_finding` で実際のコードを
+  読んで確かめること」を指示していますが、`securia_list_suppressions` で何が抑制されたかは
+  いつでも確認でき、`securia_unsuppress` で戻せます。
+- スキャンは同期実行です。大きなリポジトリではクライアント側が待ちます。
 
 ---
 
@@ -197,6 +272,10 @@ Securia/
 │   ├── diff.py           # 前回との差分
 │   ├── jobs.py           # 非同期スキャンと進捗配信
 │   ├── server.py         # HTTP サーバーとセキュリティ検査
+│   ├── mcp/
+│   │   ├── protocol.py     # JSON-RPC 2.0 と stdio 転送
+│   │   ├── server.py       # MCP のライフサイクルとメソッド
+│   │   └── tools.py        # Claude へ公開するツールとリソース
 │   ├── scan/
 │   │   ├── walker.py       # ディレクトリ走査とファイル読み込み
 │   │   ├── dependency.py   # マニフェスト/ロックファイルのパーサ
