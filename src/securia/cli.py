@@ -95,6 +95,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub_parser("rules", "設定で参照できるルール ID の一覧を表示する")
 
+    sub_parser("mcp", "MCP サーバーとして動作する（stdio。Claude などから使う）")
+
     return ap
 
 
@@ -135,6 +137,8 @@ def main(argv: list[str] | None = None) -> int:
                 return _cmd_unsuppress(args, store)
             case "suppressions":
                 return _cmd_suppressions(args, store)
+            case "mcp":
+                return _cmd_mcp(cfg, store)
             case _:
                 ap.error(f"未知のコマンド: {args.command}")
                 return EXIT_ERROR
@@ -152,6 +156,13 @@ def _cmd_serve(args: argparse.Namespace, cfg: Config, store: Store) -> int:
         open_browser=False if args.no_browser else None,
         initial_path=args.path,
     )
+    return EXIT_OK
+
+
+def _cmd_mcp(cfg: Config, store: Store) -> int:
+    from .mcp import serve_stdio  # 起動時のみ読み込む
+
+    serve_stdio(cfg, store)
     return EXIT_OK
 
 
