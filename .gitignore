@@ -1,0 +1,39 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 仮想環境
+.venv/
+venv/
+env/
+
+# パッケージング成果物
+build/
+dist/
+*.egg-info/
+
+# テスト・型チェック・Linter のキャッシュ
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Securia のスキャン出力 ---
+# `python3 run.py --cli <path> --out report.json` の生成物
+report.json
+*.report.json
+
+# --- OS ---
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+
+# --- エディタ ---
+.idea/
+.vscode/
+*.swp

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Securify Local — ローカル脆弱性スキャナ (追加インストール不要 / 標準ライブラリのみ)
+"""Securia Local — ローカル脆弱性スキャナ (追加インストール不要 / 標準ライブラリのみ)
 
 使い方:
     python3 run.py                 # 127.0.0.1:8787 で起動しブラウザを開く
@@ -72,13 +72,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, {"error": f"スキャン中にエラー: {e}"})
 
     def log_message(self, fmt, *args):  # ログを簡潔に
-        sys.stderr.write("[securify-local] %s\n" % (fmt % args))
+        sys.stderr.write("[securia-local] %s\n" % (fmt % args))
 
 
 def serve(port, open_browser):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}/"
-    print(f"\n  Securify Local を起動しました → {url}")
+    print(f"\n  Securia Local を起動しました → {url}")
     print("  対象フォルダを入力して『スキャン実行』を押してください。")
     print("  停止するには Ctrl+C。\n")
     if open_browser:
@@ -91,7 +91,7 @@ def serve(port, open_browser):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Securify Local — ローカル脆弱性スキャナ")
+    ap = argparse.ArgumentParser(description="Securia Local — ローカル脆弱性スキャナ")
     ap.add_argument("--port", type=int, default=8787)
     ap.add_argument("--path", default=os.getcwd(), help="初期対象フォルダ")
     ap.add_argument("--no-browser", action="store_true")
